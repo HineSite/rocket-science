@@ -1,0 +1,266 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Thrust It!</title>
+
+    <link rel="stylesheet" type="text/css" href=""/>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        body {
+            height: 100vh;
+            background-color: black;
+            text-align: center;
+        }
+
+        #canvas {
+            background-color: deepskyblue;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+
+<script type="text/javascript">//<![CDATA[
+let screenWidth = 1024;
+let screenHeight = 768;
+
+let canvass = document.querySelector("#canvas");
+let ctx = canvass.getContext("2d");
+canvass.width = screenWidth;
+canvass.height = screenHeight;
+
+let spaceDown = false;
+let gravity = { x: 0, y: -9.8 };
+let rocket = { // Thrust and mass roughly based on a fully loaded falcon 9.
+    v: { x: 0, y: 0 },
+    initP: { x: screenWidth / 2, y: 568 },
+    p: { x: screenWidth / 2, y: 568 },
+    width: 50,
+    height: 150,
+    mass: 500000, // kg
+    payload: 20000, // kg
+
+    engine: {
+        getThrust: function() {
+            return {
+                x: 0,
+                y: 7000000 // N
+            }
+        },
+        mass: 4000, // kg
+        burnTime: 0,
+    },
+
+    totalMass: function () {
+        return (this.engine.mass + this.mass + this.payload);
+    },
+
+    updatePos: function () {
+        this.p.x -= this.v.x;
+        this.p.y -= this.v.y;
+
+        if (this.p.y > this.initP.y) {
+            this.p.y = this.initP.y;
+        }
+    },
+};
+
+let vector = {
+    getMagnitude: function(vector) {
+        return Math.sqrt(Math.pow(vector.x, 2) + Math.pow(vector.y, 2));
+    },
+
+    addV: function (v1, v2) {
+        return {
+            x: (v1.x + v2.x),
+            y: (v1.y + v2.y)
+        };
+    },
+
+    divide: function (vector, denominator) {
+        return {
+            x: (vector.x / denominator),
+            y: (vector.y / denominator)
+        };
+    },
+
+    multiply: function (vector, multiplier) {
+        return {
+            x: (vector.x * multiplier),
+            y: (vector.y * multiplier)
+        };
+    },
+
+    normalize: function (vector) {
+        return this.divide(vector, this.getMagnitude(vector));
+    },
+
+    toString: function (vector) {
+        return "(" + vector.x + ", " + vector.y + ")";
+    },
+};
+
+function drawBoard() {
+    ctx.beginPath();
+    ctx.arc(screenWidth / 2, 2500, 2000, 0, 2 * Math.PI);
+    ctx.fillStyle = "forestgreen";
+    ctx.fill();
+
+
+    ctx.beginPath();
+    ctx.rect(rocket.initP.x - 50, rocket.initP.y + 50, 100, 75);
+    ctx.fillStyle = "#434447";
+    ctx.fill();
+}
+
+function drawRocket() {
+    ctx.save();
+    ctx.beginPath();
+
+    ctx.translate(rocket.p.x, rocket.p.y);
+
+    let halfW = (rocket.width / 2);
+    let halfH = (rocket.height / 2);
+
+
+    if (spaceDown) {
+        let rand = randomInt(-2, 2);
+        ctx.beginPath(); // flame
+        ctx.moveTo((-rocket.width / 3) - rand, halfH + halfW + 3);
+        ctx.lineTo(randomInt(-2, 2), rocket.height + randomInt(-2, 2));
+        ctx.lineTo((rocket.width / 3) + rand, halfH + halfW + 3);
+        ctx.fillStyle = "#ff4500";
+        ctx.fill();
+
+        ctx.beginPath(); // fire
+        ctx.arc(0, halfH + halfW, (rocket.width / 3) + rand, 0, 2 * Math.PI);
+        ctx.fillStyle = "#ff4500";
+        ctx.fill();
+    }
+
+
+    { // thruster
+        let normB = 1 - (rocket.engine.burnTime / Math.max(rocket.engine.burnTime, 5));
+        let grdHeight = (halfH + halfW) * 5;
+        let grd = ctx.createLinearGradient(0, 0, 0, grdHeight);
+        grd.addColorStop(0, "darkgrey");
+        grd.addColorStop(Math.max(normB, .28), "black");
+
+        ctx.beginPath();
+        ctx.arc(0, halfH + halfW - 6, halfW, 0, Math.PI, true);
+        ctx.fillStyle = grd;
+        ctx.fill();
+    }
+
+
+    { // body
+        let grd = ctx.createLinearGradient(-halfW, 0, halfW, 0);
+        grd.addColorStop(0, "#bfc1c2");
+        grd.addColorStop(.5, "#dcdcdc");
+        grd.addColorStop(1, "#bfc1c2");
+
+        ctx.beginPath();
+        ctx.rect(-rocket.width / 2, -halfH, rocket.width, rocket.height);
+        ctx.fillStyle = grd;
+        ctx.fill();
+    }
+
+    { // nose
+        let grd = ctx.createRadialGradient(0, -halfH, halfW, 0, 10, halfW);
+        grd.addColorStop(0, "#dcdcdc");
+        grd.addColorStop(.3, "#bfc1c2");
+        grd.addColorStop(1, "#bfc1c2");
+
+        ctx.beginPath();
+        ctx.arc(0, -halfH, halfW, 0, Math.PI, true);
+        ctx.fillStyle = grd;
+        ctx.fill();
+    }
+
+
+    ctx.restore();
+}
+
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawBoard();
+    drawRocket();
+}
+
+
+function update(dtm, dts) {
+    if (spaceDown) {
+        rocket.engine.burnTime += dts;
+
+        // The force is the magnitude of the thrust vector.
+        let force = vector.getMagnitude(rocket.engine.getThrust());
+        let accel = (force / rocket.totalMass()); // The acceleration depends on the engine's thrust and the total mass of the rocket.
+        accel *= dts; // acceleration since last frame.
+
+        // To apply the acceleration in the direction of the thrust, you need to get the thrust direction.
+        let thrustN = vector.normalize(rocket.engine.getThrust()); // The unit vector represents the direction of the thrust.
+        let accelV = vector.multiply(thrustN, accel); // Then create the acceleration vector.
+
+        rocket.v = vector.addV(rocket.v, accelV); // Apply the acceleration
+    }
+
+    // Only apply gravity if the rocket is not on the launch pad.
+    if (rocket.p.y < rocket.initP.y) {
+        // Really, gravity should always be applied. But whether you move depends on your collision detection.
+
+        // Gravity is applied to all objects equally regardless of mass. So we just need to know how much gravity has happened since the last frame.
+        rocket.v = vector.addV(rocket.v, vector.multiply(gravity, dts));
+    }
+
+    rocket.updatePos();
+}
+
+
+let time = performance.now();
+function mainLoop() {
+    let dtm = (performance.now() - time);
+
+    update(dtm, dtm / 1000);
+
+    draw();
+
+    time = performance.now();
+    window.requestAnimationFrame(mainLoop);
+}
+mainLoop();
+
+
+window.addEventListener('keydown', function (event) {
+    if (event.key === ' ') {
+        spaceDown = true;
+    }
+});
+
+window.addEventListener('keyup', function (event) {
+    if (event.key === ' ') {
+        spaceDown = false;
+    }
+});
+
+
+function randomInt(min, max) { // min and max included
+    return Math.floor(Math.random() * (max - min + 1) + min);
+}
+
+//]]></script>
+</body>
+</html>
