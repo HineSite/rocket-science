@@ -71,7 +71,7 @@ canvas.height = screenHeight;
 
 let keysDown = {};
 let gravity = { x: 0, y: -9.8 };
-let rocket = { // Thrust and mass roughly based on a fully loaded falcon 9.
+let _rocket = { // Thrust and mass roughly based on a fully loaded falcon 9.
     v: { x: 0, y: 0 },
     initP: { x: screenWidth / 2, y: 568 },
     p: { x: screenWidth / 2, y: 568 },
@@ -93,6 +93,10 @@ let rocket = { // Thrust and mass roughly based on a fully loaded falcon 9.
         },
         mass: 4000, // kg
         burnTime: 0,
+    },
+
+    getAngle: function () {
+        return (this.v.x === 0 && this.v.y === 0 ? _angles.QUARTER_PI : _vector.getAngle(_rocket.v));
     },
 
     totalMass: function () {
@@ -179,86 +183,95 @@ function drawBoard() {
 
 
     ctx.beginPath();
-    ctx.rect(rocket.initP.x - 50, rocket.initP.y + 50, 100, 75);
+    ctx.rect(_rocket.initP.x - 50, _rocket.initP.y + 50, 100, 75);
     ctx.fillStyle = "#d7d2f1";
     ctx.fill();
 }
 
 function drawRocket() {
     ctx.save();
-    ctx.beginPath();
 
-    ctx.translate(rocket.p.x, rocket.p.y);
-    //ctx.rotate(_vector.getAngle(rocket.v));
+    ctx.translate(_rocket.p.x, _rocket.p.y);
+    ctx.rotate(-_angles.QUARTER_PI);
 
-    let halfW = (rocket.width / 2);
-    let halfH = (rocket.height / 2);
+    let halfW = (_rocket.width / 2);
+    let halfH = (_rocket.height / 2);
 
-    // Only using 1/4 of the gimbal for display. Looks better.
-    let gimbal = _angles.QUARTER_PI - _vector.getAngle(rocket.engine.getThrust());
+    let gimbal = _angles.QUARTER_PI - _vector.getAngle(_rocket.engine.getThrust());
+    //gimbal += randomInt(-.015, .015);
 
-    if (keysDown.space) {
-        let rand = randomInt(-2, 2);
-        ctx.beginPath(); // flame
-        ctx.moveTo((-rocket.width / 3) - rand, halfH + halfW + 3);
-        ctx.lineTo(randomInt(-2, 2) + _angles.toDegrees(gimbal), rocket.height + randomInt(-2, 2));
-        ctx.lineTo((rocket.width / 3) + rand, halfH + halfW + 3);
-        ctx.fillStyle = "#ff4500";
-        ctx.fill();
+    ctx.save();
+    {
+        ctx.rotate(gimbal);
 
-        ctx.beginPath(); // fire
-        ctx.arc(0, halfH + halfW, (rocket.width / 3) + rand, 0, _angles.FULL_PI);
-        ctx.fillStyle = "#ff4500";
-        ctx.fill();
+        if (keysDown.space) {
+            let rand = randomInt(-2, 2);
+            ctx.beginPath(); // flame
+            let startX = -(halfH + (halfW * 1.5));
+            let flameW = ((_rocket.width / 3) + rand);
+            let flameL = (startX - (halfH * .9) - randomInt(-2, 2));
+
+            ctx.moveTo(startX, flameW);
+            ctx.lineTo(flameL, randomInt(-2, 2));
+            ctx.lineTo(startX, -flameW);
+            ctx.fillStyle = "#ff4500";
+            ctx.fill();
+
+            ctx.beginPath(); // fireball
+            ctx.arc(startX, 0, flameW, 0, _angles.FULL_PI);
+            ctx.fillStyle = "#ff4500";
+            ctx.fill();
+        }
+
+        { // thruster
+            let normB = 1 - (_rocket.engine.burnTime / Math.max(_rocket.engine.burnTime, 5));
+            let thrusterOffset = (-halfH - (halfW * 1.3));
+
+            let grd = ctx.createLinearGradient(0, 0, thrusterOffset * 5, 0);
+            grd.addColorStop(0, "darkgrey");
+            grd.addColorStop(Math.max(normB, .28), "black");
+
+            ctx.beginPath();
+            ctx.ellipse(thrusterOffset, 0, halfW * 1.5, halfW * .9, 0, (_angles.QUARTER_PI * 3) - 0, (_angles.FULL_PI + _angles.QUARTER_PI) + -0);
+            //ctx.arc(-halfH, 0, halfW, -gimbal, Math.PI + -gimbal, true);
+            ctx.fillStyle = grd;
+            ctx.fill();
+        }
     }
-
-
-    { // thruster
-        let normB = 1 - (rocket.engine.burnTime / Math.max(rocket.engine.burnTime, 5));
-        let grdHeight = (halfH + halfW) * 5;
-        let grd = ctx.createLinearGradient(0, 0, 0, grdHeight);
-        grd.addColorStop(0, "darkgrey");
-        grd.addColorStop(Math.max(normB, .28), "black");
-
-        ctx.beginPath();
-        ctx.arc(0, halfH + halfW - 6, halfW, -gimbal, Math.PI + -gimbal, true);
-        ctx.fillStyle = grd;
-        ctx.fill();
-    }
+    ctx.restore();
 
 
     { // body
-        let grd = ctx.createLinearGradient(-halfW, 0, halfW, 0);
+        let grd = ctx.createLinearGradient(0, -halfW, 0, halfW);
         grd.addColorStop(0, "#bfc1c2");
         grd.addColorStop(.5, "#dcdcdc");
         grd.addColorStop(1, "#bfc1c2");
 
         ctx.beginPath();
-        ctx.rect(-rocket.width / 2, -halfH, rocket.width, rocket.height);
+        ctx.rect(-halfH, -_rocket.width / 2, _rocket.height, _rocket.width);
         ctx.fillStyle = grd;
         ctx.fill();
     }
 
     { // nose
-        let grd = ctx.createRadialGradient(0, -halfH, halfW, 0, 10, halfW);
+        let grd = ctx.createRadialGradient(-halfH, 0, halfW, 10, 0, halfW);
         grd.addColorStop(0, "#dcdcdc");
         grd.addColorStop(.3, "#bfc1c2");
         grd.addColorStop(1, "#bfc1c2");
 
         ctx.beginPath();
-        ctx.arc(0, -halfH, halfW, 0, Math.PI, true);
+        ctx.arc(halfH, 0, halfW, _angles.QUARTER_PI * 3, _angles.FULL_PI + _angles.QUARTER_PI);
         ctx.fillStyle = grd;
         ctx.fill();
     }
-
 
     ctx.restore();
 }
 
 function drawReadout() {
-    speedReadout.innerHTML = (rocket.v.y < 0 ? "-" : " ") + _vector.getMagnitude(rocket.v).toFixed(1) + " m/s" +
-        " (" + rocket.v.x.toFixed(1) + ", " + rocket.v.y.toFixed(1) + ")" +
-        " " + _angles.toDegrees(_vector.getAngle(rocket.v)) + "&deg;"
+    speedReadout.innerHTML = (_rocket.v.y < 0 ? "-" : " ") + _vector.getMagnitude(_rocket.v).toFixed(1) + " m/s" +
+        " (" + _rocket.v.x.toFixed(1) + ", " + _rocket.v.y.toFixed(1) + ")" +
+        " " + _angles.toDegrees(_rocket.getAngle()).toFixed(1) + "&deg;"
     ;
 }
 
@@ -272,45 +285,45 @@ function draw() {
 
 
 function update(dtm, dts) {
-    rocket.engine.gimbal = 0;
+    _rocket.engine.gimbal = 0;
 
     if (keysDown.space) {
-        rocket.engine.burnTime += dts;
+        _rocket.engine.burnTime += dts;
 
         if (keysDown.ArrowLeft) {
-            rocket.engine.gimbal = 4;
+            _rocket.engine.gimbal = 2;
         }
         else if (keysDown.ArrowRight) {
-            rocket.engine.gimbal = -4;
+            _rocket.engine.gimbal = -2;
         }
         else {
-            rocket.engine.gimbal = 0;
+            _rocket.engine.gimbal = 0;
         }
 
         // The force is the magnitude of the thrust vector.
-        let force = _vector.getMagnitude(rocket.engine.getThrust());
-        let accel = (force / rocket.totalMass()); // The acceleration depends on the engine's thrust and the total mass of the rocket.
+        let force = _vector.getMagnitude(_rocket.engine.getThrust());
+        let accel = (force / _rocket.totalMass()); // The acceleration depends on the engine's thrust and the total mass of the rocket.
         accel *= dts; // acceleration since last frame.
 
         // To apply the acceleration in the direction of the thrust, you need to get the thrust direction.
-        let thrustN = _vector.normalize(rocket.engine.getThrust()); // The unit vector represents the direction of the thrust.
+        let thrustN = _vector.normalize(_rocket.engine.getThrust()); // The unit vector represents the direction of the thrust.
         let accelV = _vector.multiply(thrustN, accel); // Then create the acceleration vector.
 
-        rocket.v = _vector.addV(rocket.v, accelV); // Apply the acceleration
+        _rocket.v = _vector.addV(_rocket.v, accelV); // Apply the acceleration
     }
 
     // Only apply gravity if the rocket is not on the launch pad.
-    if (rocket.p.y < rocket.initP.y) {
+    if (_rocket.p.y < _rocket.initP.y) {
         // Really, gravity should always be applied. But whether you move depends on your collision detection.
 
         // Gravity is applied to all objects equally regardless of mass. So we just need to know how much gravity has happened since the last frame.
-        rocket.v = _vector.addV(rocket.v, _vector.multiply(gravity, dts));
+        _rocket.v = _vector.addV(_rocket.v, _vector.multiply(gravity, dts));
     }
-    else if (rocket.v.y < 0) {
-        rocket.v = { x: 0, y: 0 };
+    else if (_rocket.v.y < 0) {
+        _rocket.v = { x: 0, y: 0 };
     }
 
-    rocket.updatePos();
+    _rocket.updatePos();
 }
 
 
