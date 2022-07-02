@@ -41,6 +41,7 @@
         .controls .bottom {
             margin-top: 20px;
             font-size: 12px;
+            line-height: 20px;
         }
     </style>
 </head>
@@ -49,7 +50,7 @@
 <canvas id="canvas"></canvas>
 <div class="controls">
     <div class="left">
-        <div>Speed: <span id="speed"></span>m/s</div>
+        <div>Speed: <span id="speed"></span></div>
         <div class="bottom">
             <div>Space to activate thruster.</div>
             <div>Left and Right arrows to control gimbal.</div>
@@ -68,7 +69,7 @@ let ctx = canvas.getContext("2d");
 canvas.width = screenWidth;
 canvas.height = screenHeight;
 
-let spaceDown = false;
+let keysDown = {};
 let gravity = { x: 0, y: -9.8 };
 let rocket = { // Thrust and mass roughly based on a fully loaded falcon 9.
     v: { x: 0, y: 0 },
@@ -80,11 +81,15 @@ let rocket = { // Thrust and mass roughly based on a fully loaded falcon 9.
     payload: 20000, // kg
 
     engine: {
+        maxGimbal: 4, // degrees
+        maxThrust: 7000000, // N
+        thrust: 7000000,
+        gimbal: 0,
         getThrust: function() {
-            return {
-                x: 0,
-                y: 7000000 // N
-            }
+            // The gimbal angle is relative to the angle of the rocket. For now, that angle is simply 90 degrees.
+            let angle = _angles.toRadians(90 - Math.min(this.gimbal, this.maxGimbal));
+
+            return _vector.fromAngle(angle, Math.min(this.thrust, this.maxThrust));
         },
         mass: 4000, // kg
         burnTime: 0,
@@ -104,7 +109,22 @@ let rocket = { // Thrust and mass roughly based on a fully loaded falcon 9.
     },
 };
 
-let vector = {
+let _angles = {
+    PI_180: (Math.PI / 180),
+    FULL_PI: (2 * Math.PI),
+    HALF_PI: (Math.PI),
+    QUARTER_PI: (.5 * Math.PI),
+
+    toDegrees: function (radians) {
+        return (radians / this.PI_180);
+    },
+
+    toRadians: function (degrees) {
+        return (degrees * this.PI_180);
+    },
+};
+
+let _vector = {
     getMagnitude: function(vector) {
         return Math.sqrt(Math.pow(vector.x, 2) + Math.pow(vector.y, 2));
     },
@@ -134,14 +154,26 @@ let vector = {
         return this.divide(vector, this.getMagnitude(vector));
     },
 
-    toString: function (vector) {
-        return "(" + vector.x + ", " + vector.y + ")";
+    getAngle: function (vector) {
+        let tan = Math.atan2(vector.y, vector.x);
+        return (tan < 0 ? (_angles.FULL_PI + tan) : tan);
+    },
+
+    fromAngle: function (angle, magnitude) {
+        return {
+            x: (Math.cos(angle) * magnitude),
+            y: (Math.sin(angle) * magnitude),
+        }
+    },
+
+    toString: function (vector, rnd) {
+        return "(" + vector.x.toFixed(rnd) + ", " + vector.y.toFixed(rnd) + ")";
     },
 };
 
 function drawBoard() {
     ctx.beginPath();
-    ctx.arc(screenWidth / 2, 2500, 2000, 0, 2 * Math.PI);
+    ctx.arc(screenWidth / 2, 2500, 2000, 0, _angles.FULL_PI);
     ctx.fillStyle = "forestgreen";
     ctx.fill();
 
@@ -157,22 +189,25 @@ function drawRocket() {
     ctx.beginPath();
 
     ctx.translate(rocket.p.x, rocket.p.y);
+    //ctx.rotate(_vector.getAngle(rocket.v));
 
     let halfW = (rocket.width / 2);
     let halfH = (rocket.height / 2);
 
+    // Only using 1/4 of the gimbal for display. Looks better.
+    let gimbal = _angles.QUARTER_PI - _vector.getAngle(rocket.engine.getThrust());
 
-    if (spaceDown) {
+    if (keysDown.space) {
         let rand = randomInt(-2, 2);
         ctx.beginPath(); // flame
         ctx.moveTo((-rocket.width / 3) - rand, halfH + halfW + 3);
-        ctx.lineTo(randomInt(-2, 2), rocket.height + randomInt(-2, 2));
+        ctx.lineTo(randomInt(-2, 2) + _angles.toDegrees(gimbal), rocket.height + randomInt(-2, 2));
         ctx.lineTo((rocket.width / 3) + rand, halfH + halfW + 3);
         ctx.fillStyle = "#ff4500";
         ctx.fill();
 
         ctx.beginPath(); // fire
-        ctx.arc(0, halfH + halfW, (rocket.width / 3) + rand, 0, 2 * Math.PI);
+        ctx.arc(0, halfH + halfW, (rocket.width / 3) + rand, 0, _angles.FULL_PI);
         ctx.fillStyle = "#ff4500";
         ctx.fill();
     }
@@ -186,7 +221,7 @@ function drawRocket() {
         grd.addColorStop(Math.max(normB, .28), "black");
 
         ctx.beginPath();
-        ctx.arc(0, halfH + halfW - 6, halfW, 0, Math.PI, true);
+        ctx.arc(0, halfH + halfW - 6, halfW, -gimbal, Math.PI + -gimbal, true);
         ctx.fillStyle = grd;
         ctx.fill();
     }
@@ -221,7 +256,10 @@ function drawRocket() {
 }
 
 function drawReadout() {
-    speedReadout.innerHTML = (rocket.v.y < 0 ? "-" : " ") + vector.getMagnitude(rocket.v).toFixed(1);
+    speedReadout.innerHTML = (rocket.v.y < 0 ? "-" : " ") + _vector.getMagnitude(rocket.v).toFixed(1) + " m/s" +
+        " (" + rocket.v.x.toFixed(1) + ", " + rocket.v.y.toFixed(1) + ")" +
+        " " + _angles.toDegrees(_vector.getAngle(rocket.v)) + "&deg;"
+    ;
 }
 
 function draw() {
@@ -234,19 +272,31 @@ function draw() {
 
 
 function update(dtm, dts) {
-    if (spaceDown) {
+    rocket.engine.gimbal = 0;
+
+    if (keysDown.space) {
         rocket.engine.burnTime += dts;
 
+        if (keysDown.ArrowLeft) {
+            rocket.engine.gimbal = 4;
+        }
+        else if (keysDown.ArrowRight) {
+            rocket.engine.gimbal = -4;
+        }
+        else {
+            rocket.engine.gimbal = 0;
+        }
+
         // The force is the magnitude of the thrust vector.
-        let force = vector.getMagnitude(rocket.engine.getThrust());
+        let force = _vector.getMagnitude(rocket.engine.getThrust());
         let accel = (force / rocket.totalMass()); // The acceleration depends on the engine's thrust and the total mass of the rocket.
         accel *= dts; // acceleration since last frame.
 
         // To apply the acceleration in the direction of the thrust, you need to get the thrust direction.
-        let thrustN = vector.normalize(rocket.engine.getThrust()); // The unit vector represents the direction of the thrust.
-        let accelV = vector.multiply(thrustN, accel); // Then create the acceleration vector.
+        let thrustN = _vector.normalize(rocket.engine.getThrust()); // The unit vector represents the direction of the thrust.
+        let accelV = _vector.multiply(thrustN, accel); // Then create the acceleration vector.
 
-        rocket.v = vector.addV(rocket.v, accelV); // Apply the acceleration
+        rocket.v = _vector.addV(rocket.v, accelV); // Apply the acceleration
     }
 
     // Only apply gravity if the rocket is not on the launch pad.
@@ -254,7 +304,10 @@ function update(dtm, dts) {
         // Really, gravity should always be applied. But whether you move depends on your collision detection.
 
         // Gravity is applied to all objects equally regardless of mass. So we just need to know how much gravity has happened since the last frame.
-        rocket.v = vector.addV(rocket.v, vector.multiply(gravity, dts));
+        rocket.v = _vector.addV(rocket.v, _vector.multiply(gravity, dts));
+    }
+    else if (rocket.v.y < 0) {
+        rocket.v = { x: 0, y: 0 };
     }
 
     rocket.updatePos();
@@ -277,13 +330,19 @@ mainLoop();
 
 window.addEventListener('keydown', function (event) {
     if (event.key === ' ') {
-        spaceDown = true;
+        keysDown.space = true;
+    }
+    else {
+        keysDown[event.key] = true;
     }
 });
 
 window.addEventListener('keyup', function (event) {
     if (event.key === ' ') {
-        spaceDown = false;
+        delete keysDown.space;
+    }
+    else {
+        delete keysDown[event.key];
     }
 });
 
