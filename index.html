@@ -75,6 +75,7 @@ let _rocket = { // Thrust and mass roughly based on a fully loaded falcon 9.
     v: { x: 0, y: 0 },
     initP: { x: screenWidth / 2, y: 568 },
     p: { x: screenWidth / 2, y: 568 },
+    r: { x: 0, y: 1 },
     width: 50,
     height: 150,
     mass: 500000, // kg
@@ -176,14 +177,16 @@ let _vector = {
 };
 
 function drawBoard() {
+    // Ground
     ctx.beginPath();
     ctx.arc(screenWidth / 2, 2500, 2000, 0, _angles.FULL_PI);
     ctx.fillStyle = "forestgreen";
     ctx.fill();
 
 
+    // Landing pad
     ctx.beginPath();
-    ctx.rect(_rocket.initP.x - 50, _rocket.initP.y + 50, 100, 75);
+    ctx.rect(_rocket.initP.x - 50, _rocket.initP.y + 60, 100, 75);
     ctx.fillStyle = "#d7d2f1";
     ctx.fill();
 }
@@ -192,13 +195,13 @@ function drawRocket() {
     ctx.save();
 
     ctx.translate(_rocket.p.x, _rocket.p.y);
-    ctx.rotate(-_angles.QUARTER_PI);
+    //ctx.rotate(-_angles.QUARTER_PI);
+    ctx.rotate(-_vector.getAngle(_rocket.r));
 
     let halfW = (_rocket.width / 2);
     let halfH = (_rocket.height / 2);
 
     let gimbal = _angles.QUARTER_PI - _vector.getAngle(_rocket.engine.getThrust());
-    //gimbal += randomInt(-.015, .015);
 
     ctx.save();
     {
@@ -206,6 +209,7 @@ function drawRocket() {
 
         if (keysDown.space) {
             let rand = randomInt(-2, 2);
+
             ctx.beginPath(); // flame
             let startX = -(halfH + (halfW * 1.5));
             let flameW = ((_rocket.width / 3) + rand);
@@ -232,8 +236,7 @@ function drawRocket() {
             grd.addColorStop(Math.max(normB, .28), "black");
 
             ctx.beginPath();
-            ctx.ellipse(thrusterOffset, 0, halfW * 1.5, halfW * .9, 0, (_angles.QUARTER_PI * 3) - 0, (_angles.FULL_PI + _angles.QUARTER_PI) + -0);
-            //ctx.arc(-halfH, 0, halfW, -gimbal, Math.PI + -gimbal, true);
+            ctx.ellipse(thrusterOffset, 0, halfW * 1.5, halfW * .9, 0, (_angles.QUARTER_PI * 3), (_angles.FULL_PI + _angles.QUARTER_PI));
             ctx.fillStyle = grd;
             ctx.fill();
         }
@@ -270,7 +273,7 @@ function drawRocket() {
 
 function drawReadout() {
     speedReadout.innerHTML = (_rocket.v.y < 0 ? "-" : " ") + _vector.getMagnitude(_rocket.v).toFixed(1) + " m/s" +
-        " (" + _rocket.v.x.toFixed(1) + ", " + _rocket.v.y.toFixed(1) + ")" +
+        _vector.toString(_rocket.v, 1) +
         " " + _angles.toDegrees(_rocket.getAngle()).toFixed(1) + "&deg;"
     ;
 }
@@ -297,7 +300,7 @@ function update(dtm, dts) {
             _rocket.engine.gimbal = -2;
         }
         else {
-            _rocket.engine.gimbal = 0;
+            _rocket.engine.gimbal = randomDecimal(-.48, .5);
         }
 
         // The force is the magnitude of the thrust vector.
@@ -362,6 +365,10 @@ window.addEventListener('keyup', function (event) {
 
 function randomInt(min, max) { // min and max included
     return Math.floor(Math.random() * (max - min + 1) + min);
+}
+
+function randomDecimal(min, max) { // min and max included
+    return (Math.random() * (max - min) + min);
 }
 
 //]]></script>
