@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>Thrust It!</title>
+    <title>Rocket Science</title>
 
     <link rel="stylesheet" type="text/css" href=""/>
 
@@ -322,7 +322,7 @@ function update(dtm, dts) {
         let accel = (force / _rocket.totalMass()); // The acceleration depends on the engine's thrust and the total mass of the rocket.
         accel *= dts; // acceleration since last frame.
 
-        // To apply the acceleration in the direction of the thrust, you need to get the thrust direction.
+        // To apply the acceleration in the direction of the thrust, you need to get the thrust angle.
         let thrustN = _vector.normalize(_rocket.engine.getThrust()); // The unit vector represents the direction of the thrust.
         let accelV = _vector.multiply(thrustN, accel); // Then create the acceleration vector.
 
