@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>worldly</title>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        body {
+            height: 100vh;
+            background-color: black;
+            text-align: center;
+        }
+
+        #canvas {
+            background-color: deepskyblue;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<script type="text/javascript">//<![CDATA[
+let _canvas = document.querySelector("#canvas");
+let _ctx = _canvas.getContext("2d");
+_canvas.width = window.innerWidth;
+_canvas.height = window.innerHeight;
+
+let _planetRadius = 1737500; // m (size of the moon)
+let _rocketHeight = 70; // m (height of the falcon 9)
+
+let _mouse = {
+    isDown: false,
+    p: { x: 0, y: 0 },
+    delta: { x: 0, y: 0 },
+    downAt: { x: 0, y: 0 },
+    upAt: { x: 0, y: 0 },
+};
+
+let _lastMouseP = { x: 0, y: 0 };
+
+let _angles = {
+    PI_180: (Math.PI / 180),
+    FULL_PI: (2 * Math.PI),
+    HALF_PI: (Math.PI),
+    QUARTER_PI: (.5 * Math.PI),
+
+    toDegrees: function (radians) {
+        return (radians / this.PI_180);
+    },
+
+    toRadians: function (degrees) {
+        return (degrees * this.PI_180);
+    },
+};
+let _vector = {
+    getMagnitude: function(vector) {
+        return Math.sqrt(Math.pow(vector.x, 2) + Math.pow(vector.y, 2));
+    },
+
+    addV: function (v1, v2) {
+        return {
+            x: (v1.x + v2.x),
+            y: (v1.y + v2.y)
+        };
+    },
+
+    subtractV: function (v1, v2) {
+        return {
+            x: (v1.x - v2.x),
+            y: (v1.y - v2.y)
+        };
+    },
+
+    divide: function (vector, denominator) {
+        return {
+            x: (vector.x / denominator),
+            y: (vector.y / denominator)
+        };
+    },
+
+    multiply: function (vector, multiplier) {
+        return {
+            x: (vector.x * multiplier),
+            y: (vector.y * multiplier)
+        };
+    },
+
+    normalize: function (vector) {
+        return this.divide(vector, this.getMagnitude(vector));
+    },
+
+    getAngle: function (vector) {
+        let tan = Math.atan2(vector.y, vector.x);
+        return (tan < 0 ? (_angles.FULL_PI + tan) : tan);
+    },
+
+    fromAngle: function (angle, magnitude) {
+        return {
+            x: (Math.cos(angle) * magnitude),
+            y: (Math.sin(angle) * magnitude),
+        }
+    },
+
+    toString: function (vector, rnd) {
+        return "(" + vector.x.toFixed(rnd) + ", " + vector.y.toFixed(rnd) + ")";
+    },
+};
+
+let _mainCamera = {
+    scale: 1.6,
+    p: { x: _canvas.width / 2, y: (_planetRadius * 1.6) + (_canvas.height - _rocketHeight * 1.6) },
+};
+
+let _contextProxy = {
+    // This translator takes the "normal to me" coordinates and rotations, and translates
+    //  them so that they will appear on the canvas as I would expect.
+    //
+    // For example, I expect positive 'y' to go up, I expect positive 'x' to go right,
+    //  and I expect a 90-degree rotation to point up on the positive 'y' axis.
+    //
+    // It should be clear to you how tedious this is, and if it is, you are probably screaming matrices.
+    //  To which, I will say, later...
+
+    // Also, it is not a real proxy because context has several nested layers, and I didn't want to proxy everything...
+    // This seemed quicker somehow...
+
+    ctx: _ctx,
+
+    rect: function(x, y, width, height)
+    {
+        this.ctx.rect(x - (height / 2), y - (width / 2), height, width);
+    },
+
+    arc: function(x, y, radius, startAngle, endAngle, counterclockwise)
+    {
+        this.ctx.arc(x, y, radius, startAngle - _angles.QUARTER_PI, endAngle - _angles.QUARTER_PI, counterclockwise ?? true);
+    },
+
+    translate: function(x, y)
+    {
+        this.ctx.translate(x, -y);
+    },
+
+    rotate: function(degrees)
+    {
+        this.ctx.rotate(_angles.toRadians(degrees));
+    },
+
+    createLinearGradient: function(x0, y0, x1, y1)
+    {
+        let dy = (y0 - y1) / 2;
+        let dx = (x0 - x1) / 2;
+        return this.ctx.createLinearGradient(-dy, -dx, dy, dx);
+    },
+
+    beginPath: function()
+    {
+        return this.ctx.beginPath();
+    },
+
+    save: function()
+    {
+        return this.ctx.save();
+    },
+
+    restore: function()
+    {
+        return this.ctx.restore();
+    },
+
+    fill: function()
+    {
+        return this.ctx.fill();
+    },
+
+    stroke: function()
+    {
+        return this.ctx.stroke();
+    },
+
+    set fillStyle (style) {
+        this.ctx.fillStyle = style;
+    },
+
+    set strokeStyle (style) {
+        this.ctx.strokeStyle = style;
+    },
+};
+
+let _world = {
+    objects: {
+        planet: {
+            p: { x: 0, y: 0 },
+            rotation: 90, // degrees
+            radius: _planetRadius, // m (size of the moon)
+            gravity: 9.8, // m/s^2 (with earths gravity.)
+
+            draw: function(ctx) {
+                let grd = ctx.createLinearGradient(0, this.radius * 2.5, 0, 0);
+                grd.addColorStop(0, "forestgreen");
+                grd.addColorStop(1, "black");
+
+                ctx.translate(this.p.x, this.p.y);
+                ctx.rotate(this.rotation);
+
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, _angles.FULL_PI);
+                ctx.fillStyle = grd;
+                ctx.fill();
+            },
+        },
+
+        rocket: {
+            p: { x: 0, y: _planetRadius },
+            rotation: 90, // degrees
+            width: 3.7, // m
+            height: _rocketHeight, // m
+
+            draw: function(ctx) {
+                let grd = ctx.createLinearGradient(0, this.height, 0, 0);
+                grd.addColorStop(0, "orange");
+                grd.addColorStop(.1, "white");
+                grd.addColorStop(1, "white");
+
+                ctx.translate(this.p.x, this.p.y);
+                ctx.rotate(this.rotation);
+
+                ctx.beginPath();
+                ctx.rect(0, 0, this.width, this.height);
+                ctx.fillStyle = grd;
+                ctx.fill();
+            },
+        },
+    },
+};
+
+function draw() {
+    _ctx.reset();
+
+    drawWorld(_ctx, _mainCamera);
+}
+
+function drawWorld(ctx, camera) {
+    ctx.translate(camera.p.x, camera.p.y);
+    ctx.scale(camera.scale, camera.scale);
+
+    for (const obj in _world.objects) {
+        ctx.save();
+        _world.objects[obj].draw(_contextProxy);
+        ctx.restore();
+    }
+}
+
+function update(dtm, dts) {
+    if (_mouse.isDown) {
+        let deltaM = _vector.subtractV(_mouse.p , _lastMouseP);
+        _lastMouseP = _mouse.p;
+
+        _mainCamera.p = _vector.addV(_mainCamera.p, deltaM);
+    }
+}
+
+
+
+
+function mainLoop(time) {
+    let dtm = (performance.now() - time);
+
+    update(dtm, dtm / 1000);
+    draw();
+
+    window.requestAnimationFrame(function() {
+        mainLoop(performance.now());
+    });
+}
+mainLoop(performance.now());
+
+
+
+function zoom(deltaY) {
+    // To zoom, change the X and Y scale of the canvas.
+    // Here, the scale is provided by the main camera (i.e. it works by moving the camera away from the subject).
+    //
+    // In order to keep the subject in frame, you need to move the camera.
+    // When zooming with a mouse, the expectation is that the camera remain focused on the mouse cursor.
+
+    // First determine how fast to zoom (I assume different mice and browsers will zoom at different rates).
+    // This formula should probably factor in deltaY. However, with my browser and mouse, this works well with
+    //  a consistent deltaYof 53.
+    let zoomSpeedFactor = 0.0825;
+
+    // Zoom in if scrolling up, zoom out if scrolling down.
+    let zoomingOut = (deltaY > 0);
+
+    // The zoom speed factor allows the zoom to be faster when zoomed way in.
+    let deltaZ = (zoomingOut ? -(_mainCamera.scale * zoomSpeedFactor) : (_mainCamera.scale * zoomSpeedFactor));
+
+    { // Prevent infinite zoom for no good reason.
+        // The scale increases as you zoom in.
+
+        if (!zoomingOut && (_mainCamera.scale + deltaZ) > 120) { // {0.00005) {
+            deltaZ = (120 - _mainCamera.scale);
+        }
+
+        if (zoomingOut && (_mainCamera.scale + deltaZ) < 0.00005) {
+            deltaZ = (0.00005 - _mainCamera.scale);
+        }
+    }
+
+    // Get a translation vector from the camera to the mouse position.
+    // This tells us the direction to move the camera, but because the world is about to be smaller,
+    //  it doesn't tell how far to move the camera; hence the unit vector.
+    let moveVector = _vector.normalize(_vector.subtractV(_mainCamera.p, _mouse.p));
+
+    // Next calculate the distance the camera needs to move, to keep the canvas at the mouse position.
+    // Here it uses the planet's radius, but any object with a known size would work.
+    // I'm calling it a magic number, because although the math works, it is a little odd.
+    let magicNumber = (_planetRadius * deltaZ);
+    moveVector = _vector.multiply(moveVector, magicNumber);
+
+    _mainCamera.p = _vector.addV(_mainCamera.p, moveVector);
+    _mainCamera.scale += deltaZ;
+}
+
+_canvas.addEventListener('wheel', function(event) {
+    zoom(event.deltaY);
+});
+
+_canvas.addEventListener('mousemove', function(event) {
+    _mouse.p = {
+        x: event.clientX,
+        y: event.clientY
+    };
+});
+
+_canvas.addEventListener('mousedown', function(event) {
+    if (event.which === 1) {
+        _mouse.isDown = true;
+        _mouse.downAt = {
+            x: event.clientX,
+            y: event.clientY
+        };
+
+        _lastMouseP = {
+            x: event.clientX,
+            y: event.clientY
+        };
+    }
+});
+
+_canvas.addEventListener('mouseup', function(event) {
+    if (event.which === 1) {
+        _mouse.isDown = false;
+        _mouse.upAt = {
+            x: event.clientX,
+            y: event.clientY
+        };
+    }
+});
+
+window.addEventListener('resize', function() {
+    let deltaW = (window.innerWidth - _canvas.width);
+    let deltaH = (window.innerHeight - _canvas.height);
+
+    _canvas.width = window.innerWidth;
+    _canvas.height = window.innerHeight;
+
+    // It sorta works. Good enough.
+    _mainCamera.p.x += deltaW;
+    _mainCamera.p.y += deltaH;
+});
+
+//]]></script>
+</body>
+</html>
