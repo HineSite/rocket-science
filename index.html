@@ -1,4 +1,4 @@
-<!DOCTYPE HTML>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -125,7 +125,6 @@ let _angles = {
         return (degrees * this.PI_180);
     },
 };
-
 let _vector = {
     getMagnitude: function(vector) {
         return Math.sqrt(Math.pow(vector.x, 2) + Math.pow(vector.y, 2));
@@ -135,6 +134,13 @@ let _vector = {
         return {
             x: (v1.x + v2.x),
             y: (v1.y + v2.y)
+        };
+    },
+
+    subtractV: function (v1, v2) {
+        return {
+            x: (v1.x - v2.x),
+            y: (v1.y - v2.y)
         };
     },
 
