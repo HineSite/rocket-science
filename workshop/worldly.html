@@ -347,7 +347,6 @@ function translateFromWorld(x, y) {
     return new Vector(trans.x + (_canvas.width / 2), (_canvas.height / 2) - trans.y);
 }
 
-let _lastMousePos = 0;
 function addEventListeners(canvas) {
     // Disable context menu.
     canvas.oncontextmenu = function(event) {
@@ -363,7 +362,11 @@ function addEventListeners(canvas) {
     canvas.addEventListener('mousemove', function(event) {
         let currentMouse = new Vector(event.clientX, event.clientY);
         if (_mouse.left.isDown) {
-            let deltaM = currentMouse.subtract(_lastMousePos);
+            if (!_lastMouseP) {
+                _lastMouseP = _mouse.left.downAt
+            }
+
+            let deltaM = currentMouse.subtract(_lastMouseP);
 
             _mainCamera.moveBy(new Vector(-deltaM.x, deltaM.y), 0);
         }
@@ -371,7 +374,7 @@ function addEventListeners(canvas) {
         // You cannot use the world coordinates to find the mouse delta.
         //  This is because the world is always moving to the mouse, meaning the mouses
         //  world coordinates remain the same. If they are not the same, something bad happened.
-        _lastMousePos = currentMouse;
+        _lastMouseP = currentMouse;
 
         _mouse.moveTo(translateToWorld(event.clientX, event.clientY));
     });
@@ -379,10 +382,6 @@ function addEventListeners(canvas) {
     canvas.addEventListener('mousedown', function(event) {
         let worldCoords = translateToWorld(event.clientX, event.clientY);
         _mouse.onMouseDown(event.which, worldCoords.x, worldCoords.y);
-
-        if (event.which === 1) {
-            _lastMouseP = worldCoords;
-        }
 
         event.preventDefault();
         event.stopPropagation();
