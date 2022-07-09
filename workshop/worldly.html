@@ -397,13 +397,7 @@ function addEventListeners(canvas) {
     });
 
     window.addEventListener('resize', function() {
-        let deltaW = (window.innerWidth - _canvas.width);
-        let deltaH = (window.innerHeight - _canvas.height);
-
         _canvas.updateSize(window.innerWidth, window.innerHeight);
-
-        // It sorta works. Good enough.
-        _mainCamera.moveBy(new Vector(deltaW, deltaH));
     });
 }
 
