@@ -9,8 +9,7 @@ class Camera {
     #minY;
     #maxScale;
     #minScale;
-    #onScaleCallback;
-    #onMoveCallback;
+    #onCameraChangeCallback;
 
     constructor(position, scale) {
         this.#p = position;
@@ -22,49 +21,46 @@ class Camera {
         return this;
     }
 
-    initEvents(onScaleCallback, onMoveCallback) {
-        if (typeof onScaleCallback === "function") {
-            this.#onScaleCallback = onScaleCallback;
-        }
-
-        if (typeof onMoveCallback === "function") {
-            this.#onMoveCallback = onMoveCallback;
+    initEvents(onCameraChangeCallback) {
+        if (typeof onCameraChangeCallback === "function") {
+            this.#onCameraChangeCallback = onCameraChangeCallback;
         }
 
         return this;
     }
 
-    move(deltaX, deltaY, deltaScale) {
-        this.#p = new Vector(this.#p.x + deltaX, this.#p.y + deltaY);
+    moveBy(deltaVector, deltaScale) {
+        this.#p = this.#p.add(deltaVector);
         this.#scale += deltaScale;
 
-        if (deltaX !== 0 || deltaY !== 0) {
-            this.#triggerOnMove();
-        }
-
-        if (deltaScale !== 0) {
-            this.#triggerOnScale();
+        if (deltaVector.x !== 0 || deltaVector.y !== 0 || deltaScale !== 0) {
+            this.#triggerOnCameraChangeCallback();
         }
     }
 
-    #triggerOnMove() {
-        if (this.#onMoveCallback) {
-            try {
-                this.#onMoveCallback(this);
-            }
-            catch (e) {
-                console.log("An error occurred in the onMoveCallback of Camera: " + e);
-            }
+    moveTo(vector, scale) {
+        let vectorDifferent = !this.#p.equals(vector);
+        let scaleDifferent = false;
+
+        this.#p = vector;
+
+        if (!isNaN(scale)) {
+            scaleDifferent = (this.#scale !== scale);
+            this.#scale = scale;
+        }
+
+        if (vectorDifferent || scaleDifferent) {
+            this.#triggerOnCameraChangeCallback();
         }
     }
 
-    #triggerOnScale() {
-        if (this.#onScaleCallback) {
+    #triggerOnCameraChangeCallback() {
+        if (this.#onCameraChangeCallback) {
             try {
-                this.#onScaleCallback(this);
+                this.#onCameraChangeCallback(this);
             }
             catch (e) {
-                console.log("An error occurred in the onScaleCallback of Camera: " + e);
+                console.log("An error occurred in the OnCameraChangeCallback of Camera: " + e);
             }
         }
     }
@@ -73,17 +69,7 @@ class Camera {
         return this.#scale;
     }
 
-    set scale(scale) {
-        this.#scale = scale;
-        this.#triggerOnScale();
-    }
-
     get p() {
         return this.#p;
-    }
-
-    set p(vector) {
-        this.#p = vector;
-        this.#triggerOnMove();
     }
 }

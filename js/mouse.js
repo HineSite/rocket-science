@@ -61,8 +61,8 @@ class Mouse {
         };
     }
 
-    moveTo(x, y) {
-        this.#p = new Vector(x, y);
+    moveTo(vector) {
+        this.#p = vector;
     }
 
     onScroll(deltaY) {

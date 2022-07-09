@@ -40,6 +40,10 @@ class Vector {
         return (tan < 0 ? (2 * Math.PI + tan) : tan);
     }
 
+    equals (vector) {
+        return (this.#x === vector.x && this.#y === vector.y);
+    }
+
     toString (decimalPlaces) {
         return this.#x.toFixed(decimalPlaces) + ", " + this.#y.toFixed(decimalPlaces);
     }

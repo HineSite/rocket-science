@@ -222,7 +222,8 @@ function drawHud(ctx) {
 function draw(ctx, camera) {
     ctx.reset();
 
-    drawHud(ctx);
+    ctx.save();
+
     //let screenCoords = translateFromWorld(camera.p);
     //ctx.translate(screenCoords.x, -screenCoords.y);
     ctx.translate(-camera.p.x + (_canvas.width / 2), -(camera.p.y + (_canvas.height / 2)));
@@ -235,19 +236,12 @@ function draw(ctx, camera) {
     }
 
     ctx.restore();
+
+    drawHud(ctx);
 }
 
 function update(dtm, dts) {
-    // if (_mouse.left.isDown) {
-    //     if (!_lastMouseP) {
-    //         _lastMouseP = _mouse.p;
-    //     }
-    //
-    //     let deltaM = _mouse.p.subtract(_lastMouseP);
-    //     _lastMouseP = _mouse.p;
-    //
-    //     _mainCamera.p = _mainCamera.p.subtract(deltaM);
-    // }
+
 }
 
 
@@ -319,8 +313,7 @@ function zoom(deltaY) {
     let newMouseP = _mouse.p.multiply(_mainCamera.scale + deltaScale);
     let deltaMouseP = newMouseP.subtract(currentMouseP);
 
-    _mainCamera.scale += deltaScale;
-    _mainCamera.move(deltaMouseP.x, deltaMouseP.y, 0);
+    _mainCamera.moveBy(deltaMouseP, deltaScale);
 }
 
 function translateToWorld(x, y) {
@@ -354,6 +347,7 @@ function translateFromWorld(x, y) {
     return new Vector(trans.x + (_canvas.width / 2), (_canvas.height / 2) - trans.y);
 }
 
+let _lastMousePos = 0;
 function addEventListeners(canvas) {
     // Disable context menu.
     canvas.oncontextmenu = function(event) {
@@ -362,20 +356,24 @@ function addEventListeners(canvas) {
     }
 
     canvas.addEventListener('wheel', function(event) {
-        console.log(event);
         _mouse.onScroll(event.deltaY);
         zoom(event.deltaY);
     });
 
     canvas.addEventListener('mousemove', function(event) {
-        let worldCoords = translateToWorld(event.clientX, event.clientY);
+        let currentMouse = new Vector(event.clientX, event.clientY);
+        if (_mouse.left.isDown) {
+            let deltaM = currentMouse.subtract(_lastMousePos);
 
-        // if (_mouse.left.isDown) {
-        //     let deltaM = _mouse.p.subtract(worldCoords);
-        //     _mainCamera.p = _mainCamera.p.add(deltaM);
-        // }
+            _mainCamera.moveBy(new Vector(-deltaM.x, deltaM.y), 0);
+        }
 
-        _mouse.moveTo(worldCoords.x, worldCoords.y);
+        // You cannot use the world coordinates to find the mouse delta.
+        //  This is because the world is always moving to the mouse, meaning the mouses
+        //  world coordinates remain the same. If they are not the same, something bad happened.
+        _lastMousePos = currentMouse;
+
+        _mouse.moveTo(translateToWorld(event.clientX, event.clientY));
     });
 
     canvas.addEventListener('mousedown', function(event) {
@@ -406,7 +404,7 @@ function addEventListeners(canvas) {
         _canvas.updateSize(window.innerWidth, window.innerHeight);
 
         // It sorta works. Good enough.
-        _mainCamera.p = new Vector(_mainCamera.p.x + deltaW, _mainCamera.p.y + deltaH);
+        _mainCamera.moveBy(new Vector(deltaW, deltaH));
     });
 }
 
