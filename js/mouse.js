@@ -1,15 +1,14 @@
 // Requires Vector
 
-class Mouse
-{
+class Mouse {
     #scrollY = 0;
-    #p = undefined;
+    #p;
     #buttons = {};
     #buttonMap = {}; // e.g. { event.which: "right" }
 
-    constructor(initialX, initialY, buttonMap) {
-        this.#p = new Vector(initialX, initialY);
-        this.#buttonMap = buttonMap;
+    constructor(position, buttonMap) {
+        this.#p = position ?? new Vector(0 , 0);
+        this.#buttonMap = buttonMap ?? {};
 
         // Add mapped buttons
         for (let btn in buttonMap) {
@@ -25,8 +24,8 @@ class Mouse
         };
     }
 
-    onMove(deltaX, deltaY) {
-        this.#p = new Vector(deltaX, deltaY);
+    moveTo(x, y) {
+        this.#p = new Vector(x, y);
     }
 
     onScroll(deltaY) {
@@ -60,7 +59,15 @@ class Mouse
     }
 
     get p() {
-        return new Vector(this.#p.x, this.#p.y);
+        return this.#p;
+    }
+
+    get x() {
+        return this.#p.x;
+    }
+
+    get y() {
+        return this.#p.y;
     }
 
     get scroll() {

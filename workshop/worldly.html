@@ -26,7 +26,6 @@
     </style>
 </head>
 <body>
-
 <canvas id="canvas"></canvas>
 
 <script type="application/javascript" src="../js/angles.js"></script>
@@ -36,9 +35,11 @@
 <script type="application/javascript" src="../js/mouse.js"></script>
 
 <script type="text/javascript">//<![CDATA[
-let _planetRadius = 1737500; // m (size of the moon)
+let _planetRadius = 100;//1737500; // m (size of the moon)
 let _rocketHeight = 70; // m (height of the falcon 9)
-let _initialScale = 1.6; // initial scale of main camera
+let _initialScale = 1;//1.6; // initial scale of main camera
+let _maxScale = 120;
+let _minScale = .00005;
 
 let _lastMouseP = null;
 
@@ -53,6 +54,8 @@ class ContextProxy {
     //
     // For example, I expect positive 'y' to go up, I expect positive 'x' to go right,
     //  and I expect a 90-degree rotation to point up on the positive 'y' axis.
+    //
+    // In addition, I want the center of my world to be at x = 0, y = 0.
     //
     // It should be clear to you how tedious this is, and if it is, you are probably screaming matrices.
     //  To which, I will say, later...
@@ -79,6 +82,7 @@ class ContextProxy {
     translate(x, y)
     {
         this.#ctx.translate(x, -y);
+        //this.#ctx.translate(x, y);
     }
 
     rotate(degrees)
@@ -108,9 +112,24 @@ class ContextProxy {
         return this.#ctx.restore();
     }
 
+    reset()
+    {
+        return this.#ctx.reset();
+    }
+
+    scale(x, y)
+    {
+        return this.#ctx.scale(x, y);
+    }
+
     fill()
     {
         return this.#ctx.fill();
+    }
+
+    fillText(text, x, y, maxWidth)
+    {
+        return this.#ctx.fillText(text, x, y, maxWidth);
     }
 
     stroke()
@@ -124,6 +143,10 @@ class ContextProxy {
 
     set strokeStyle (style) {
         this.#ctx.strokeStyle = style;
+    }
+
+    set font (font) {
+        this.#ctx.font = font;
     }
 }
 
@@ -174,25 +197,57 @@ let _world = {
     },
 };
 
+function drawHud(ctx) {
+    ctx.save();
+
+    let x = 10;
+    let y = 1;
+    let ySpacing = 20;
+
+    ctx.beginPath();
+    ctx.font = "15px Arial";
+    ctx.fillStyle = "white";
+
+    ctx.fillText("World Coords | Screen Coords", x, y++ * ySpacing);
+    ctx.fillText("Mouse: " + _mouse.p.toString() + " | " + translateFromWorld(_mouse.p).toString(), x, y++ * ySpacing);
+    ctx.fillText("Left Down At: " + _mouse.btn("left").downAt.toString() + " | " + translateFromWorld(_mouse.btn("left").downAt).toString(), x + 10, y++ * ySpacing);
+    ctx.fillText("Left Up At: " + _mouse.btn("left").upAt.toString() + " | " + translateFromWorld(_mouse.btn("left").upAt).toString(), x + 10, y++ * ySpacing);
+    ctx.fillText("Camera: " + _mainCamera.p.toString() + " | " + translateFromWorld(_mainCamera.p).toString(), x, y++ * ySpacing);
+    ctx.fillText("Scale: " + _mainCamera.scale, x, y++ * ySpacing);
+    ctx.fillText("Canvas Center: " + new Vector(_canvas.width / 2, _canvas.height / 2).toString(), x, y++ * ySpacing);
+
+    ctx.restore();
+}
+
 function draw(ctx, camera) {
     ctx.reset();
-    ctx.translate(camera.p.x, camera.p.y);
+
+    drawHud(ctx);
+    //let screenCoords = translateFromWorld(camera.p);
+    //ctx.translate(screenCoords.x, -screenCoords.y);
+    ctx.translate(-camera.p.x + (_canvas.width / 2), -(camera.p.y + (_canvas.height / 2)));
     ctx.scale(camera.scale, camera.scale);
 
     for (const obj in _world.objects) {
         ctx.save();
-        _world.objects[obj].draw(_contextProxy);
+        _world.objects[obj].draw(ctx);
         ctx.restore();
     }
+
+    ctx.restore();
 }
 
 function update(dtm, dts) {
-    if (_mouse.btn("left").isDown) {
-        let deltaM = _mouse.p.subtract(_lastMouseP);
-        _lastMouseP = _mouse.p;
-
-        _mainCamera.p = _mainCamera.p.add(deltaM);
-    }
+    // if (_mouse.btn("left").isDown) {
+    //     if (!_lastMouseP) {
+    //         _lastMouseP = _mouse.p;
+    //     }
+    //
+    //     let deltaM = _mouse.p.subtract(_lastMouseP);
+    //     _lastMouseP = _mouse.p;
+    //
+    //     _mainCamera.p = _mainCamera.p.subtract(deltaM);
+    // }
 }
 
 
@@ -213,26 +268,23 @@ function init() {
     let canvas = document.querySelector("#canvas");
     let ctx = canvas.getContext("2d");
 
-    _mouse = new Mouse(0, 0, { 1: "left" });
+    //_mainCamera = new Camera(new Vector(_canvas.width / 2, (_planetRadius * _initialScale) + (_canvas.height - _rocketHeight * _initialScale)), _initialScale);
+    _mainCamera = new Camera(new Vector(0, 0), _initialScale);
+    _mouse = new Mouse(new Vector(0, 0), { 1: "left" });
     _canvas = new Canvas(canvas, window.innerWidth, window.innerHeight);
     addEventListeners(canvas);
 
-    _mainCamera = new Camera(new Vector(_canvas.width / 2, (_planetRadius * _initialScale) + (_canvas.height - _rocketHeight * _initialScale)), _initialScale);
-
     _contextProxy = new ContextProxy(ctx);
 
-    mainLoop(performance.now(), ctx);
+    mainLoop(performance.now(), _contextProxy);
 }
 init();
 
-
-
 function zoom(deltaY) {
-    // To zoom, change the X and Y scale of the canvas.
-    // Here, the scale is provided by the main camera (i.e. it works by moving the camera away from the subject).
-    //
-    // In order to keep the subject in frame, you need to move the camera.
-    // When zooming with a mouse, the expectation is that the camera remain focused on the mouse cursor.
+    // To zoom in and out on the mouse, what we need to do is calculate the
+    //  mouses position before and after the scale change.
+    // Then we move the camera by that amount. This keeps the mouse at the
+    //  same location before and after the scaling.
 
     // First determine how fast to zoom (I assume different mice and browsers will zoom at different rates).
     // This formula should probably factor in deltaY. However, with my browser and mouse, this works well with
@@ -242,37 +294,64 @@ function zoom(deltaY) {
     // Zoom in if scrolling up, zoom out if scrolling down.
     let zoomingOut = (deltaY > 0);
 
-    // The zoom speed factor allows the zoom to be faster when zoomed way in.
-    let deltaZ = (zoomingOut ? -(_mainCamera.scale * zoomSpeedFactor) : (_mainCamera.scale * zoomSpeedFactor));
+    // Multiplying the zoom speed factor by the current scale allows the zoom to be faster when zoomed way in.
+    let deltaScale = (zoomingOut ? -_mainCamera.scale * zoomSpeedFactor : _mainCamera.scale * zoomSpeedFactor);
 
     { // Prevent infinite zoom for no good reason.
         // The scale increases as you zoom in.
+        // A negative scale will reverse the y coordinates, and scaling by 0 results in 0,
+        //  so it is important to clamp the minimum to something greater than 0.
 
-        if (!zoomingOut && (_mainCamera.scale + deltaZ) > 120) { // {0.00005) {
-            deltaZ = (120 - _mainCamera.scale);
+        if (_mainCamera.scale + deltaScale === 0) {
+            deltaScale += (zoomingOut ? -.00000001 : .00000001);
         }
 
-        if (zoomingOut && (_mainCamera.scale + deltaZ) < 0.00005) {
-            deltaZ = (0.00005 - _mainCamera.scale);
+        if (!zoomingOut && (_mainCamera.scale + deltaScale) > _maxScale) {
+            deltaScale = (_maxScale - _mainCamera.scale);
+        }
+
+        if (zoomingOut && (_mainCamera.scale + deltaScale) < _minScale) {
+            deltaScale = (_minScale - _mainCamera.scale);
         }
     }
 
-    // Get a translation vector from the camera to the mouse position.
-    // This tells us the direction to move the camera, but because the world is about to be smaller,
-    //  it doesn't tell how far to move the camera; hence the unit vector.
-    let moveVector = _mainCamera.p.subtract(_mouse.p);
-    moveVector = moveVector.normalize();
+    let currentMouseP = _mouse.p.multiply(_mainCamera.scale);
+    let newMouseP = _mouse.p.multiply(_mainCamera.scale + deltaScale);
+    let deltaMouseP = newMouseP.subtract(currentMouseP);
 
-    // Next calculate the distance the camera needs to move, to keep the canvas at the mouse position.
-    // Here it uses the planet's radius, but any object with a known size would work.
-    // I'm calling it a magic number, because although the math works, it is a little odd.
-    let magicNumber = (_planetRadius * deltaZ);
-    moveVector = moveVector.multiply(magicNumber);
+    _mainCamera.scale += deltaScale;
+    _mainCamera.move(deltaMouseP.x, deltaMouseP.y, 0);
+}
 
-    _mainCamera.p = _mainCamera.p.add(moveVector);
-    _mainCamera.scale += deltaZ;
+function translateToWorld(x, y) {
+    // The center of the world is at 0,0, which is the center of the screen.
+    // However, the screen sees 0,0 as the top left point. It also sees positive y as moving down.
+    // Here, the x,y is translated from screen coordinates to world coordinates.
 
-    // Note: this is still not correct on the y translation...
+    let ix = x;
+    let iy = y;
+
+    if (x instanceof Vector) {
+        ix = x.x;
+        iy = x.y;
+    }
+
+    return new Vector(ix - (_canvas.width / 2), (_canvas.height / 2) - iy).add(_mainCamera.p).divide(_mainCamera.scale);
+}
+
+function translateFromWorld(x, y) {
+    // Here, the x,y is translated from world coordinates to screen coordinates.
+
+    let ix = x;
+    let iy = y;
+
+    if (x instanceof Vector) {
+        ix = x.x;
+        iy = x.y;
+    }
+
+    let trans = new Vector(ix, iy).multiply(_mainCamera.scale).subtract(_mainCamera.p);
+    return new Vector(trans.x + (_canvas.width / 2), (_canvas.height / 2) - trans.y);
 }
 
 function addEventListeners(canvas) {
@@ -282,22 +361,28 @@ function addEventListeners(canvas) {
     });
 
     canvas.addEventListener('mousemove', function(event) {
-        _mouse.onMove(event.clientX, event.clientY);
+        let worldCoords = translateToWorld(event.clientX, event.clientY);
+
+        // if (_mouse.btn("left").isDown) {
+        //     let deltaM = _mouse.p.subtract(worldCoords);
+        //     _mainCamera.p = _mainCamera.p.add(deltaM);
+        // }
+
+        _mouse.moveTo(worldCoords.x, worldCoords.y);
     });
 
     canvas.addEventListener('mousedown', function(event) {
-        _mouse.onMouseDown(event.which, event.clientX, event.clientY);
+        let worldCoords = translateToWorld(event.clientX, event.clientY);
+        _mouse.onMouseDown(event.which, worldCoords.x, worldCoords.y);
 
         if (event.which === 1) {
-            _lastMouseP = {
-                x: event.clientX,
-                y: event.clientY
-            };
+            _lastMouseP = worldCoords;
         }
     });
 
     canvas.addEventListener('mouseup', function(event) {
-        _mouse.onMouseUp(event.which, event.clientX, event.clientY);
+        let worldCoords = translateToWorld(event.clientX, event.clientY);
+        _mouse.onMouseUp(event.which, worldCoords.x, worldCoords.y);
     });
 
     window.addEventListener('resize', function() {

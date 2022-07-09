@@ -41,7 +41,7 @@ class Vector {
     }
 
     toString (decimalPlaces) {
-        return "(" + this.#x.toFixed(decimalPlaces) + ", " + this.#y.toFixed(decimalPlaces) + ")";
+        return this.#x.toFixed(decimalPlaces) + ", " + this.#y.toFixed(decimalPlaces);
     }
 
     get x() {
