@@ -210,8 +210,8 @@ function drawHud(ctx) {
 
     ctx.fillText("World Coords | Screen Coords", x, y++ * ySpacing);
     ctx.fillText("Mouse: " + _mouse.p.toString() + " | " + translateFromWorld(_mouse.p).toString(), x, y++ * ySpacing);
-    ctx.fillText("Left Down At: " + _mouse.btn("left").downAt.toString() + " | " + translateFromWorld(_mouse.btn("left").downAt).toString(), x + 10, y++ * ySpacing);
-    ctx.fillText("Left Up At: " + _mouse.btn("left").upAt.toString() + " | " + translateFromWorld(_mouse.btn("left").upAt).toString(), x + 10, y++ * ySpacing);
+    ctx.fillText("Left Down At: " + _mouse.left.downAt.toString() + " | " + translateFromWorld(_mouse.left.downAt).toString(), x + 10, y++ * ySpacing);
+    ctx.fillText("Left Up At: " + _mouse.left.upAt.toString() + " | " + translateFromWorld(_mouse.left.upAt).toString(), x + 10, y++ * ySpacing);
     ctx.fillText("Camera: " + _mainCamera.p.toString() + " | " + translateFromWorld(_mainCamera.p).toString(), x, y++ * ySpacing);
     ctx.fillText("Scale: " + _mainCamera.scale, x, y++ * ySpacing);
     ctx.fillText("Canvas Center: " + new Vector(_canvas.width / 2, _canvas.height / 2).toString(), x, y++ * ySpacing);
@@ -238,7 +238,7 @@ function draw(ctx, camera) {
 }
 
 function update(dtm, dts) {
-    // if (_mouse.btn("left").isDown) {
+    // if (_mouse.left.isDown) {
     //     if (!_lastMouseP) {
     //         _lastMouseP = _mouse.p;
     //     }
@@ -270,7 +270,7 @@ function init() {
 
     //_mainCamera = new Camera(new Vector(_canvas.width / 2, (_planetRadius * _initialScale) + (_canvas.height - _rocketHeight * _initialScale)), _initialScale);
     _mainCamera = new Camera(new Vector(0, 0), _initialScale);
-    _mouse = new Mouse(new Vector(0, 0), { 1: "left" });
+    _mouse = new Mouse(new Vector(0, 0));
     _canvas = new Canvas(canvas, window.innerWidth, window.innerHeight);
     addEventListeners(canvas);
 
@@ -355,7 +355,14 @@ function translateFromWorld(x, y) {
 }
 
 function addEventListeners(canvas) {
+    // Disable context menu.
+    canvas.oncontextmenu = function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
     canvas.addEventListener('wheel', function(event) {
+        console.log(event);
         _mouse.onScroll(event.deltaY);
         zoom(event.deltaY);
     });
@@ -363,7 +370,7 @@ function addEventListeners(canvas) {
     canvas.addEventListener('mousemove', function(event) {
         let worldCoords = translateToWorld(event.clientX, event.clientY);
 
-        // if (_mouse.btn("left").isDown) {
+        // if (_mouse.left.isDown) {
         //     let deltaM = _mouse.p.subtract(worldCoords);
         //     _mainCamera.p = _mainCamera.p.add(deltaM);
         // }
@@ -378,11 +385,18 @@ function addEventListeners(canvas) {
         if (event.which === 1) {
             _lastMouseP = worldCoords;
         }
+
+        event.preventDefault();
+        event.stopPropagation();
     });
 
     canvas.addEventListener('mouseup', function(event) {
         let worldCoords = translateToWorld(event.clientX, event.clientY);
         _mouse.onMouseUp(event.which, worldCoords.x, worldCoords.y);
+
+
+        event.preventDefault();
+        event.stopPropagation();
     });
 
     window.addEventListener('resize', function() {
