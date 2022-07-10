@@ -337,7 +337,7 @@ function drawHud(canvas, camera) {
     canvas.ctx.fillText("Left Down At: " + _mouse.left.downAt.toString() + " | " + translateFromWorld(_mouse.left.downAt).toString(), x + 10, y++ * ySpacing);
     canvas.ctx.fillText("Left Up At: " + _mouse.left.upAt.toString() + " | " + translateFromWorld(_mouse.left.upAt).toString(), x + 10, y++ * ySpacing);
     canvas.ctx.fillText("Camera: " + camera.p.toString() + " | " + translateFromWorld(camera.p).toString(), x, y++ * ySpacing);
-    canvas.ctx.fillText("Rocket: " + _world.objects.rocket.p.toString(), x, y++ * ySpacing);
+    canvas.ctx.fillText("Balloon: " + (new Vector(_world.objects.rocket.p.x, _world.objects.rocket.p.y - _planetRadius)).toString(), x, y++ * ySpacing);
     canvas.ctx.fillText("Scale: " + camera.scale, x, y++ * ySpacing);
 
     canvas.ctx.restore();
@@ -415,9 +415,9 @@ function generateWorld() {
         },
     };
 
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 500; i++) {
         let fluffy = {
-            p: new Vector(randomInt(-10000, 10000), _planetRadius + randomInt(1000, 7600)),
+            p: new Vector(randomInt(-30000, 30000), _planetRadius + randomInt(1000, 7600)),
             v: new Vector(_windDirection * randomInt(15, 20), 0),
             rotation: 90,
             width: randomInt(45, 145),
@@ -455,7 +455,7 @@ function init() {
     let mini = document.querySelector("#mini");
 
     _mainCamera = new Camera(_world.objects.rocket.p, 1.6);
-    _miniCamera = new Camera(_world.objects.rocket.p, 2.5);
+    _miniCamera = new Camera(_world.objects.rocket.p, 2);
     _mouse = new Mouse(new Vector(0, 0));
     _mainCanvas = new Canvas(canvas, new ContextProxy(canvas.getContext("2d")), window.innerWidth, window.innerHeight);
     _miniCanvas = new Canvas(mini, new ContextProxy(mini.getContext("2d")), 150, 200);
