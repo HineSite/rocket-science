@@ -3,23 +3,23 @@
 class Camera {
     #p;
     #scale;
-    #maxX;
-    #maxY;
-    #minX;
-    #minY;
-    #maxScale;
-    #minScale;
+    // #maxX;
+    // #maxY;
+    // #minX;
+    // #minY;
+    // #maxScale;
+    // #minScale;
     #onCameraChangeCallback;
 
     constructor(position, scale) {
-        this.#p = position;
+        this.#p = position.multiply(scale);
         this.#scale = scale;
     }
 
-    initThresholds(maxX, maxY, minX, minY, maxScale, minScale) {
-        // ToDo: Clamps!
-        return this;
-    }
+    // initThresholds(maxX, maxY, minX, minY, maxScale, minScale) {
+    //     // ToDo: Clamps!
+    //     return this;
+    // }
 
     initEvents(onCameraChangeCallback) {
         if (typeof onCameraChangeCallback === "function") {

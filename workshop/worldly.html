@@ -35,9 +35,9 @@
 <script type="application/javascript" src="../js/mouse.js"></script>
 
 <script type="text/javascript">//<![CDATA[
-let _planetRadius = 100;//1737500; // m (size of the moon)
+let _planetRadius = 1737500; // m (radius of the moon)
 let _rocketHeight = 70; // m (height of the falcon 9)
-let _initialScale = 1;//1.6; // initial scale of main camera
+let _initialScale = 1.6; // initial scale of main camera
 let _maxScale = 120;
 let _minScale = .00005;
 
@@ -82,7 +82,6 @@ class ContextProxy {
     translate(x, y)
     {
         this.#ctx.translate(x, -y);
-        //this.#ctx.translate(x, y);
     }
 
     rotate(degrees)
@@ -225,7 +224,7 @@ function draw(ctx, camera) {
     ctx.save();
 
     //let screenCoords = translateFromWorld(camera.p);
-    //ctx.translate(screenCoords.x, -screenCoords.y);
+    //ctx.translate(screenCoords.x, -screenCoords.y); // Use negative y to negate the negative wy in the translate call.
     ctx.translate(-camera.p.x + (_canvas.width / 2), -(camera.p.y + (_canvas.height / 2)));
     ctx.scale(camera.scale, camera.scale);
 
@@ -262,8 +261,7 @@ function init() {
     let canvas = document.querySelector("#canvas");
     let ctx = canvas.getContext("2d");
 
-    //_mainCamera = new Camera(new Vector(_canvas.width / 2, (_planetRadius * _initialScale) + (_canvas.height - _rocketHeight * _initialScale)), _initialScale);
-    _mainCamera = new Camera(new Vector(0, 0), _initialScale);
+    _mainCamera = new Camera(new Vector(0, _planetRadius + _rocketHeight), _initialScale);
     _mouse = new Mouse(new Vector(0, 0));
     _canvas = new Canvas(canvas, window.innerWidth, window.innerHeight);
     addEventListeners(canvas);
@@ -398,6 +396,10 @@ function addEventListeners(canvas) {
 
     window.addEventListener('resize', function() {
         _canvas.updateSize(window.innerWidth, window.innerHeight);
+
+        // Ideally this would update the canvas size and recenter the camera and
+        //  world in such a way that nothing changes.
+        // I think to do this, you would need to recalculate the scale.
     });
 }
 
