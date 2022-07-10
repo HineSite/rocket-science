@@ -72,4 +72,12 @@ class Camera {
     get p() {
         return this.#p;
     }
+
+    get x() {
+        return this.#p.x;
+    }
+
+    get y() {
+        return this.#p.y;
+    }
 }

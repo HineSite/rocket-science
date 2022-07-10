@@ -1,8 +1,10 @@
 class Canvas {
-    #canvas = undefined;
+    #canvas;
+    #ctx;
 
-    constructor(canvas, width, height) {
+    constructor(canvas, ctx, width, height) {
         this.#canvas = canvas;
+        this.#ctx = ctx;
         this.#canvas.width = width;
         this.#canvas.height = height;
     }
@@ -18,5 +20,17 @@ class Canvas {
 
     get height() {
         return this.#canvas.height;
+    }
+
+    get ctx() {
+        return this.#ctx;
+    }
+
+    hide() {
+        this.#canvas.style.display = "none";
+    }
+
+    show() {
+        this.#canvas.style.display = "block";
     }
 }

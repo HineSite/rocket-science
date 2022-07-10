@@ -21,12 +21,27 @@
         }
 
         #canvas {
-            background-color: deepskyblue;
+
+        }
+
+        .bg-skyblue {
+            background-color: black;
+        }
+
+        .border-black {
+            border: solid 1px black;
+        }
+
+        .fixed {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
         }
     </style>
 </head>
 <body onload="init();">
-<canvas id="canvas"></canvas>
+<canvas id="canvas" class="bg-skyblue"></canvas>
+<canvas id="mini" class="bg-skyblue fixed border-black"></canvas>
 
 <script type="application/javascript" src="../js/angles.js"></script>
 <script type="application/javascript" src="../js/vector.js"></script>
@@ -37,16 +52,19 @@
 <script type="text/javascript">//<![CDATA[
 let _planetRadius = 1737500; // m (radius of the moon)
 let _rocketHeight = 70; // m (height of the falcon 9)
-let _initialScale = 1.6; // initial scale of main camera
 let _maxScale = 120;
 let _minScale = .00005;
 
 let _lastMouseP = null;
 
-let _contextProxy = null;
-let _canvas = null;
+let _mainCanvas = null;
+let _miniCanvas = null;
 let _mouse = null;
 let _mainCamera = null;
+let _miniCamera = null;
+
+let _showMiniFullView = false;
+let _windDirection = randomInt(0, 1) > 0 ? 1 : -1;
 
 let _keysDown = {};
 
@@ -76,9 +94,55 @@ class ContextProxy {
         this.#ctx.rect(x - (height / 2), y - (width / 2), height, width);
     }
 
+    fillRect(x, y, width, height)
+    {
+        this.#ctx.fillRect(x - (height / 2), y - (width / 2), height, width);
+    }
+
     arc(x, y, radius, startAngle, endAngle, counterclockwise)
     {
         this.#ctx.arc(x, y, radius, startAngle - Angles.QUARTER_PI, endAngle - Angles.QUARTER_PI, counterclockwise ?? true);
+    }
+
+    isosceles(x, y, width, height)
+    {
+        let w = (width / 2);
+        let h = (height / 2);
+
+        //      /\
+        //     /  \
+        //   /     \
+        //   - - - -
+
+        // Draws from top, to bottom right, to bottom left, back to top.
+        // Except it is drawn on its side so it can be rotated up.
+
+        this.#ctx.lineTo(h, 0);
+        this.#ctx.lineTo(-h, -w);
+        this.#ctx.lineTo(-h, w);
+        this.#ctx.lineTo(h, 0);
+    }
+
+    moveTo(x, y)
+    {
+        this.#ctx.moveTo(x, -y);
+    }
+
+    lineTo(x, y)
+    {
+        this.#ctx.lineTo(x, -y);
+    }
+
+    createLinearGradient(x0, y0, x1, y1)
+    {
+        let dy = (y0 - y1) / 2;
+        let dx = (x0 - x1) / 2;
+        return this.#ctx.createLinearGradient(dy, dx, -dy, -dx);
+    }
+
+    createRadialGradient(x0, y0, r0, x1, y1, r1)
+    {
+        return this.#ctx.createRadialGradient(x0, y0, r0, x1, y1, r1);
     }
 
     translate(x, y)
@@ -88,14 +152,8 @@ class ContextProxy {
 
     rotate(degrees)
     {
-        this.#ctx.rotate(Angles.toRadians(degrees));
-    }
-
-    createLinearGradient(x0, y0, x1, y1)
-    {
-        let dy = (y0 - y1) / 2;
-        let dx = (x0 - x1) / 2;
-        return this.#ctx.createLinearGradient(-dy, -dx, dy, dx);
+        // Adjust for clockwise rotation by using negative degrees
+        this.#ctx.rotate(Angles.toRadians(-degrees));
     }
 
     beginPath()
@@ -149,6 +207,10 @@ class ContextProxy {
     set font (font) {
         this.#ctx.font = font;
     }
+
+    set lineWidth (width) {
+        this.#ctx.lineWidth = width;
+    }
 }
 
 let _world = {
@@ -160,12 +222,21 @@ let _world = {
             gravity: 9.8, // m/s^2 (with earths gravity.)
 
             draw: function(ctx) {
-                let grd = ctx.createLinearGradient(0, this.radius * 2.5, 0, 0);
+                let grd = ctx.createLinearGradient(0, this.radius, 0, 0);
                 grd.addColorStop(0, "forestgreen");
-                grd.addColorStop(1, "black");
+                grd.addColorStop(1, "#013220");
+
+                let atmoGrd = ctx.createRadialGradient(0, 0, this.radius, 0, 0, this.radius * 1.2);
+                atmoGrd.addColorStop(0, "deepskyblue");
+                atmoGrd.addColorStop(1, "black");
 
                 ctx.translate(this.p.x, this.p.y);
                 ctx.rotate(this.rotation);
+
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * 1.2, 0, Angles.FULL_PI);
+                ctx.fillStyle = atmoGrd;
+                ctx.fill();
 
                 ctx.beginPath();
                 ctx.arc(0, 0, this.radius, 0, Angles.FULL_PI);
@@ -176,104 +247,221 @@ let _world = {
 
         rocket: {
             p: new Vector(0, _planetRadius),
-            rotation: 90, // degrees
-            width: 3.7, // m
+            v: new Vector(_windDirection * randomInt(5, 10), 0),
+            rotation: 270, // degrees
+            width: 16, // m
             height: _rocketHeight, // m
 
             draw: function(ctx) {
-                let grd = ctx.createLinearGradient(0, this.height, 0, 0);
-                grd.addColorStop(0, "orange");
-                grd.addColorStop(.1, "white");
-                grd.addColorStop(1, "white");
+                let grd = ctx.createLinearGradient(0, this.height * 1.5, 0, 0);
+                grd.addColorStop(0, "white");
+                grd.addColorStop(1, "orange");
 
-                ctx.translate(this.p.x, this.p.y);
-                ctx.rotate(this.rotation);
+                { // it's a balloon!
+                    ctx.beginPath();
+                    ctx.translate(this.p.x, this.p.y);
+                    ctx.rotate(this.rotation);
 
-                ctx.beginPath();
-                ctx.rect(0, 0, this.width, this.height);
-                ctx.fillStyle = grd;
-                ctx.fill();
+                    ctx.arc(0, 0, this.width, 0, Angles.FULL_PI);
+
+                    ctx.save();
+                    {
+                        ctx.translate(this.width, 0);
+                        ctx.isosceles(0, 0, (this.width * 2) - 5, this.width);
+                    }
+                    ctx.restore();
+
+                    ctx.save();
+                    {
+                        ctx.translate((this.width * 1.5) - 1, 0);
+                        ctx.rect(0, 0, 3.4, 2);
+                    }
+                    ctx.restore();
+
+                    ctx.fillStyle = grd;
+                    ctx.fill();
+                }
+
+
+                ctx.save();
+                { // basket
+                    ctx.translate(this.width * 2, 0);
+
+                    ctx.beginPath();
+                    ctx.rect(0, 0, 4, 1.5);
+                    ctx.fillStyle = "#380e0e";
+                    ctx.fill();
+                }
+                ctx.restore();
+
+
+                ctx.save();
+                { // Basket strings
+                    ctx.translate((this.width * 1.5) - 1, 0);
+
+                    ctx.beginPath();
+                    ctx.moveTo(1, -1.67);
+                    ctx.lineTo(8.25, -1.98);
+                    ctx.lineWidth = .05;
+                    ctx.strokeStyle = "white";
+                    ctx.stroke();
+
+
+                    ctx.beginPath();
+                    ctx.moveTo(1, 1.67);
+                    ctx.lineTo(8.25, 1.98);
+                    ctx.lineWidth = .05;
+                    ctx.strokeStyle = "white";
+                    ctx.stroke();
+                }
+                ctx.restore();
             },
         },
     },
 };
 
-function drawHud(ctx) {
-    ctx.save();
+function drawHud(canvas, camera) {
+    canvas.ctx.save();
 
     let x = 10;
     let y = 1;
     let ySpacing = 20;
 
-    ctx.beginPath();
-    ctx.font = "15px Arial";
-    ctx.fillStyle = "white";
+    canvas.ctx.beginPath();
+    canvas.ctx.font = "15px Arial";
+    canvas.ctx.fillStyle = "white";
+    canvas.ctx.background
 
-    ctx.fillText("World Coords | Screen Coords", x, y++ * ySpacing);
-    ctx.fillText("Mouse: " + _mouse.p.toString() + " | " + translateFromWorld(_mouse.p).toString(), x, y++ * ySpacing);
-    ctx.fillText("Left Down At: " + _mouse.left.downAt.toString() + " | " + translateFromWorld(_mouse.left.downAt).toString(), x + 10, y++ * ySpacing);
-    ctx.fillText("Left Up At: " + _mouse.left.upAt.toString() + " | " + translateFromWorld(_mouse.left.upAt).toString(), x + 10, y++ * ySpacing);
-    ctx.fillText("Camera: " + _mainCamera.p.toString() + " | " + translateFromWorld(_mainCamera.p).toString(), x, y++ * ySpacing);
-    ctx.fillText("Scale: " + _mainCamera.scale, x, y++ * ySpacing);
-    ctx.fillText("Canvas Center: " + new Vector(_canvas.width / 2, _canvas.height / 2).toString(), x, y++ * ySpacing);
+    canvas.ctx.fillText("World Coords | Screen Coords", x, y++ * ySpacing);
+    canvas.ctx.fillText("Mouse: " + _mouse.p.toString() + " | " + translateFromWorld(_mouse.p).toString(), x, y++ * ySpacing);
+    canvas.ctx.fillText("Left Down At: " + _mouse.left.downAt.toString() + " | " + translateFromWorld(_mouse.left.downAt).toString(), x + 10, y++ * ySpacing);
+    canvas.ctx.fillText("Left Up At: " + _mouse.left.upAt.toString() + " | " + translateFromWorld(_mouse.left.upAt).toString(), x + 10, y++ * ySpacing);
+    canvas.ctx.fillText("Camera: " + camera.p.toString() + " | " + translateFromWorld(camera.p).toString(), x, y++ * ySpacing);
+    canvas.ctx.fillText("Rocket: " + _world.objects.rocket.p.toString(), x, y++ * ySpacing);
+    canvas.ctx.fillText("Scale: " + camera.scale, x, y++ * ySpacing);
 
-    ctx.restore();
+    canvas.ctx.restore();
 }
 
-function draw(ctx, camera) {
-    ctx.reset();
+function draw(canvas, camera, includeHud) {
+    canvas.ctx.reset();
 
-    ctx.save();
+    canvas.ctx.save();
 
     //let screenCoords = translateFromWorld(camera.p);
     //ctx.translate(screenCoords.x, -screenCoords.y); // Use negative y to negate the negative wy in the translate call.
-    ctx.translate(-camera.p.x + (_canvas.width / 2), -(camera.p.y + (_canvas.height / 2)));
-    ctx.scale(camera.scale, camera.scale);
+    canvas.ctx.translate(-camera.p.x + (canvas.width / 2), -(camera.p.y + (canvas.height / 2)));
+    canvas.ctx.scale(camera.scale, camera.scale);
 
     for (const obj in _world.objects) {
-        ctx.save();
-        _world.objects[obj].draw(ctx);
-        ctx.restore();
+        canvas.ctx.save();
+        _world.objects[obj].draw(canvas.ctx);
+        canvas.ctx.restore();
     }
 
-    ctx.restore();
+    canvas.ctx.restore();
 
-    drawHud(ctx);
+    if (includeHud) {
+        drawHud(canvas, camera);
+    }
 }
 
 function update(dtm, dts) {
-    if (_keysDown.space) {
-        _world.objects.rocket.p = _world.objects.rocket.p.add(new Vector(0, 150 * dts));
+    if (_keysDown.ArrowUp) {
+        _world.objects.rocket.p = _world.objects.rocket.p.add(new Vector(0, 5 * dts));
+    }
+    else if (_keysDown.ArrowDown) {
+        _world.objects.rocket.p = _world.objects.rocket.p.subtract(new Vector(0, 5 * dts));
+    }
+
+    _miniCamera.moveTo(_world.objects.rocket.p.multiply(_miniCamera.scale));
+
+    for (let i = 0; i < _world.objects.clouds.fluffies.length; i++) {
+        let fluffy = _world.objects.clouds.fluffies[i];
+        fluffy.p = fluffy.p.add(fluffy.v.multiply(dts));
+    }
+
+    if (_world.objects.rocket.p.y > _planetRadius) {
+        _world.objects.rocket.p = _world.objects.rocket.p.add(_world.objects.rocket.v.multiply(dts));
+    }
+}
+
+function generateWorld() {
+    _world.objects.clouds = {
+        fluffies: [
+
+        ],
+
+        draw: function(ctx) {
+            for (let i = 0; i < this.fluffies.length; i++) {
+                let cloud = this.fluffies[i];
+
+                ctx.save();
+
+                ctx.translate(cloud.p.x, cloud.p.y);
+                ctx.rotate(cloud.rotation);
+
+                ctx.beginPath();
+
+                ctx.rect(0, 0, cloud.width, cloud.height);
+
+                ctx.fillStyle = "rgba(255, 255, 255, 50)";
+                ctx.fill();
+
+                ctx.restore();
+            }
+        },
+    };
+
+    for (let i = 0; i < 200; i++) {
+        let fluffy = {
+            p: new Vector(randomInt(-10000, 10000), _planetRadius + randomInt(1000, 7600)),
+            v: new Vector(_windDirection * randomInt(15, 20), 0),
+            rotation: 90,
+            width: randomInt(45, 145),
+            height: randomInt(13, 30),
+        };
+
+        _world.objects.clouds.fluffies.push(fluffy);
     }
 }
 
 
-
-
-function mainLoop(time, ctx) {
+function mainLoop(time) {
     let dtm = (performance.now() - time);
 
     update(dtm, dtm / 1000);
-    draw(ctx, _mainCamera);
+
+    if (_showMiniFullView) {
+        _miniCanvas.hide();
+        draw(_mainCanvas, _miniCamera, true);
+    }
+    else {
+        _miniCanvas.show();
+        draw(_mainCanvas, _mainCamera, true);
+        draw(_miniCanvas, _miniCamera, false);
+    }
 
     time = performance.now();
     window.requestAnimationFrame(function() {
-        mainLoop(time, ctx);
+        mainLoop(time);
     });
 }
 
 function init() {
     let canvas = document.querySelector("#canvas");
-    let ctx = canvas.getContext("2d");
+    let mini = document.querySelector("#mini");
 
-    _mainCamera = new Camera(new Vector(0, _planetRadius + _rocketHeight), _initialScale);
+    _mainCamera = new Camera(_world.objects.rocket.p, 1.6);
+    _miniCamera = new Camera(_world.objects.rocket.p, 2.5);
     _mouse = new Mouse(new Vector(0, 0));
-    _canvas = new Canvas(canvas, window.innerWidth, window.innerHeight);
+    _mainCanvas = new Canvas(canvas, new ContextProxy(canvas.getContext("2d")), window.innerWidth, window.innerHeight);
+    _miniCanvas = new Canvas(mini, new ContextProxy(mini.getContext("2d")), 150, 200);
+
     addEventListeners(canvas);
 
-    _contextProxy = new ContextProxy(ctx);
-
-    mainLoop(performance.now(), _contextProxy);
+    generateWorld();
+    mainLoop(performance.now());
 }
 
 function zoom(deltaY) {
@@ -331,7 +519,7 @@ function translateToWorld(x, y) {
         iy = x.y;
     }
 
-    return new Vector(ix - (_canvas.width / 2), (_canvas.height / 2) - iy).add(_mainCamera.p).divide(_mainCamera.scale);
+    return new Vector(ix - (_mainCanvas.width / 2), (_mainCanvas.height / 2) - iy).add(_mainCamera.p).divide(_mainCamera.scale);
 }
 
 function translateFromWorld(x, y) {
@@ -346,7 +534,7 @@ function translateFromWorld(x, y) {
     }
 
     let trans = new Vector(ix, iy).multiply(_mainCamera.scale).subtract(_mainCamera.p);
-    return new Vector(trans.x + (_canvas.width / 2), (_canvas.height / 2) - trans.y);
+    return new Vector(trans.x + (_mainCanvas.width / 2), (_mainCanvas.height / 2) - trans.y);
 }
 
 function addEventListeners(canvas) {
@@ -399,7 +587,7 @@ function addEventListeners(canvas) {
     });
 
     window.addEventListener('resize', function() {
-        _canvas.updateSize(window.innerWidth, window.innerHeight);
+        _mainCanvas.updateSize(window.innerWidth, window.innerHeight);
 
         // Ideally this would update the canvas size and recenter the camera and
         //  world in such a way that nothing changes.
@@ -422,7 +610,15 @@ function addEventListeners(canvas) {
         else {
             delete _keysDown[event.key];
         }
+
+        if (event.key === 'v') {
+            _showMiniFullView = !_showMiniFullView;
+        }
     });
+}
+
+function randomInt(min, max) { // min and max included
+    return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
 //]]></script>
