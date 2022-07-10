@@ -25,7 +25,7 @@
         }
     </style>
 </head>
-<body>
+<body onload="init();">
 <canvas id="canvas"></canvas>
 
 <script type="application/javascript" src="../js/angles.js"></script>
@@ -47,6 +47,8 @@ let _contextProxy = null;
 let _canvas = null;
 let _mouse = null;
 let _mainCamera = null;
+
+let _keysDown = {};
 
 class ContextProxy {
     // This translator takes the "normal to me" coordinates and rotations, and translates
@@ -240,7 +242,9 @@ function draw(ctx, camera) {
 }
 
 function update(dtm, dts) {
-
+    if (_keysDown.space) {
+        _world.objects.rocket.p = _world.objects.rocket.p.add(new Vector(0, 150 * dts));
+    }
 }
 
 
@@ -252,8 +256,9 @@ function mainLoop(time, ctx) {
     update(dtm, dtm / 1000);
     draw(ctx, _mainCamera);
 
+    time = performance.now();
     window.requestAnimationFrame(function() {
-        mainLoop(performance.now(), ctx);
+        mainLoop(time, ctx);
     });
 }
 
@@ -270,7 +275,6 @@ function init() {
 
     mainLoop(performance.now(), _contextProxy);
 }
-init();
 
 function zoom(deltaY) {
     // To zoom in and out on the mouse, what we need to do is calculate the
@@ -400,6 +404,24 @@ function addEventListeners(canvas) {
         // Ideally this would update the canvas size and recenter the camera and
         //  world in such a way that nothing changes.
         // I think to do this, you would need to recalculate the scale.
+    });
+
+    window.addEventListener('keydown', function (event) {
+        if (event.key === ' ') {
+            _keysDown.space = true;
+        }
+        else {
+            _keysDown[event.key] = true;
+        }
+    });
+
+    window.addEventListener('keyup', function (event) {
+        if (event.key === ' ') {
+            delete _keysDown.space;
+        }
+        else {
+            delete _keysDown[event.key];
+        }
     });
 }
 
