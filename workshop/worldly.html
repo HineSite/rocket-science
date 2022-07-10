@@ -371,7 +371,9 @@ function update(dtm, dts) {
         _world.objects.rocket.p = _world.objects.rocket.p.add(new Vector(0, 5 * dts));
     }
     else if (_keysDown.ArrowDown) {
-        _world.objects.rocket.p = _world.objects.rocket.p.subtract(new Vector(0, 5 * dts));
+        if (_world.objects.rocket.p.y > _planetRadius) {
+            _world.objects.rocket.p = _world.objects.rocket.p.subtract(new Vector(0, 5 * dts));
+        }
     }
 
     _miniCamera.moveTo(_world.objects.rocket.p.multiply(_miniCamera.scale));
